@@ -414,11 +414,12 @@ class GraphPanel(QWidget):
         cmap = self._cmap_combo.currentText()
 
         if valid.any():
-            vmin = float(np.nanmin(z_grid))
-            vmax = float(np.nanmax(z_grid))
-            if z_key == 'extra_mass':
-                bound = max(abs(vmin), abs(vmax))
-                vmin, vmax = -bound, bound
+            z_valid = z_grid[valid]
+            vmin = float(np.nanpercentile(z_valid, 2))
+            vmax = float(np.nanpercentile(z_valid, 98))
+            if vmin == vmax:
+                vmin -= 0.5
+                vmax += 0.5
             pcm = ax.pcolormesh(x_vals, y_vals, z_grid,
                                 cmap=cmap, vmin=vmin, vmax=vmax, shading='gouraud')
             cb = self._figure.colorbar(pcm, ax=ax, fraction=0.046, pad=0.04)
