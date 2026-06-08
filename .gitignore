@@ -31,3 +31,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Excel files
+*.xlsx
+*.xls
