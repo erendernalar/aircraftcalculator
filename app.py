@@ -178,6 +178,8 @@ class _FocusSpinBox(QDoubleSpinBox):
 # Graph panel
 # ------------------------------------------------------------------ #
 class GraphPanel(QWidget):
+    point_selected = pyqtSignal(str, float, str, float)  # x_key, x_val, y_key, y_val
+
     _ZONE_CMAP = {
         'extra_mass': 'RdYlGn',
         'ld_max':     'RdYlGn',
@@ -255,6 +257,7 @@ class GraphPanel(QWidget):
         self._param_ranges = None
         self._apply_mode_layout()
 
+        self._canvas.mpl_connect('button_press_event', self._on_canvas_click)
         self._x_combo.currentIndexChanged.connect(self._request_redraw)
         self._y_combo.currentIndexChanged.connect(self._request_redraw)
         self._z_combo.currentIndexChanged.connect(self._request_redraw)
@@ -287,6 +290,21 @@ class GraphPanel(QWidget):
             self._z_label.hide()
             self._z_combo.hide()
         self._y_combo.blockSignals(False)
+
+    def _on_canvas_click(self, event):
+        if self._mode != '3d' or event.inaxes is None:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+        x_key = self._x_combo.currentData()
+        y_key = self._y_combo.currentData()
+        if x_key is None or y_key is None:
+            return
+        x_cfg = (self._param_ranges or {}).get(x_key, INPUT_CONFIG[x_key])
+        y_cfg = (self._param_ranges or {}).get(y_key, INPUT_CONFIG[y_key])
+        x_val = max(x_cfg['min'], min(x_cfg['max'], event.xdata))
+        y_val = max(y_cfg['min'], min(y_cfg['max'], event.ydata))
+        self.point_selected.emit(x_key, x_val, y_key, y_val)
 
     def _request_redraw(self):
         if self._inputs is not None:
@@ -785,6 +803,7 @@ class MainWindow(QMainWindow):
     def _set_graph_count(self, count: int):
         while len(self._graph_panels) < count:
             panel = GraphPanel(mode='3d')
+            panel.point_selected.connect(self._on_graph_point_selected)
             self._graph_panels.append(panel)
             if self._results:
                 panel.update_graph(self._inputs, self._results, self._param_ranges)
@@ -857,6 +876,27 @@ class MainWindow(QMainWindow):
                     f"border: 1px solid {_BORDER}; border-radius: 3px; "
                     "padding: 0px 4px; font-family: monospace;"
                 )
+
+    # ------------------------------------------------------------------ #
+    # Graph click → input sync
+    # ------------------------------------------------------------------ #
+    def _on_graph_point_selected(self, x_key: str, x_val: float, y_key: str, y_val: float):
+        self._set_input_value(x_key, x_val)
+        self._set_input_value(y_key, y_val)
+        self._recalculate_full()
+
+    def _set_input_value(self, key: str, val: float):
+        cfg = INPUT_CONFIG[key]
+        r = self._param_ranges[key]
+        val = round(max(r['min'], min(r['max'], val)), cfg['decimals'])
+        self._inputs[key] = val
+
+        n_steps = min(10000, max(1, round((r['max'] - r['min']) / r['step'])))
+        int_val = max(0, min(round((val - r['min']) / r['step']), n_steps))
+        self._updating = True
+        self._sliders[key].setValue(int_val)
+        self._value_edits[key].setText(format(val, ".2f"))
+        self._updating = False
 
     # ------------------------------------------------------------------ #
     # File menu
