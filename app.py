@@ -14,10 +14,134 @@ from matplotlib.figure import Figure
 import calculator
 from calculator import INPUT_CONFIG, OUTPUT_CONFIG
 
+_BG      = '#1E1E2E'
+_SURFACE = '#252535'
+_OVERLAY = '#313244'
+_BORDER  = '#45475A'
+_TEXT    = '#CDD6F4'
+_SUBTEXT = '#A6ADC8'
+_MUTED   = '#6C7086'
+_ACCENT  = '#89B4FA'
+_ACCENT2 = '#FAB387'
 
-# ------------------------------------------------------------------ #
-# Self-contained graph panel  (2D line  OR  3D heatmap)
-# ------------------------------------------------------------------ #
+DARK_STYLE = f"""
+QWidget {{
+    background-color: {_BG};
+    color: {_TEXT};
+    font-size: 11px;
+}}
+QScrollArea, QScrollArea > QWidget > QWidget {{
+    background-color: {_BG};
+    border: none;
+}}
+QGroupBox {{
+    border: 1px solid {_BORDER};
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 6px;
+    font-weight: bold;
+    color: {_SUBTEXT};
+    font-size: 11px;
+}}
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+}}
+QDoubleSpinBox, QSpinBox {{
+    background: {_OVERLAY};
+    border: 1px solid {_BORDER};
+    border-radius: 3px;
+    color: {_TEXT};
+    padding: 1px 3px;
+    selection-background-color: {_ACCENT};
+    selection-color: {_BG};
+}}
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
+QSpinBox::up-button, QSpinBox::down-button {{
+    width: 14px;
+    background: {_BORDER};
+    border: none;
+    border-radius: 2px;
+}}
+QComboBox {{
+    background: {_OVERLAY};
+    border: 1px solid {_BORDER};
+    border-radius: 3px;
+    color: {_TEXT};
+    padding: 1px 4px;
+}}
+QComboBox::drop-down {{
+    border: none;
+    width: 18px;
+}}
+QComboBox QAbstractItemView {{
+    background: {_OVERLAY};
+    color: {_TEXT};
+    selection-background-color: {_ACCENT};
+    selection-color: {_BG};
+    border: 1px solid {_BORDER};
+}}
+QSlider::groove:horizontal {{
+    height: 3px;
+    background: {_OVERLAY};
+    border-radius: 2px;
+}}
+QSlider::handle:horizontal {{
+    background: {_ACCENT};
+    width: 10px;
+    height: 10px;
+    margin: -4px 0;
+    border-radius: 5px;
+}}
+QSlider::sub-page:horizontal {{
+    background: {_ACCENT};
+    border-radius: 2px;
+    opacity: 0.6;
+}}
+QPushButton {{
+    background: {_OVERLAY};
+    border: 1px solid {_BORDER};
+    border-radius: 4px;
+    color: {_TEXT};
+    padding: 2px 8px;
+}}
+QPushButton:hover {{
+    background: {_BORDER};
+    border-color: {_ACCENT};
+}}
+QPushButton:checked {{
+    background: {_ACCENT};
+    color: {_BG};
+    border-color: {_ACCENT};
+    font-weight: bold;
+}}
+QScrollBar:vertical {{
+    background: {_SURFACE};
+    width: 6px;
+    border-radius: 3px;
+    margin: 0;
+}}
+QScrollBar::handle:vertical {{
+    background: {_BORDER};
+    border-radius: 3px;
+    min-height: 20px;
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar:horizontal {{
+    background: {_SURFACE};
+    height: 6px;
+    border-radius: 3px;
+}}
+QScrollBar::handle:horizontal {{
+    background: {_BORDER};
+    border-radius: 3px;
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+QLabel {{ background: transparent; }}
+"""
+
+
 class GraphPanel(QWidget):
     _ZONE_CMAP = {
         'extra_mass': 'RdYlGn',
@@ -30,21 +154,20 @@ class GraphPanel(QWidget):
     def __init__(self, mode: str = '3d', parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._mode = mode  # '2d' or '3d'
+        self._mode = mode
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.setSpacing(2)
 
         # ---- header ----
         header = QHBoxLayout()
-        header.setContentsMargins(4, 4, 4, 2)
+        header.setContentsMargins(2, 2, 2, 0)
         header.setSpacing(4)
 
-        # Mode toggle button
         self._mode_btn = QPushButton()
-        self._mode_btn.setFixedWidth(36)
-        self._mode_btn.setFixedHeight(22)
+        self._mode_btn.setFixedWidth(34)
+        self._mode_btn.setFixedHeight(20)
         self._mode_btn.setCheckable(True)
         self._mode_btn.setChecked(mode == '3d')
         self._mode_btn.setToolTip("Switch between 2D line and 3D heatmap")
@@ -55,25 +178,29 @@ class GraphPanel(QWidget):
         input_keys  = list(INPUT_CONFIG.keys())
         output_keys = list(OUTPUT_CONFIG.keys())
 
-        # X — always an input
-        header.addWidget(QLabel("X:"))
+        x_lbl = QLabel("X:")
+        x_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
+        header.addWidget(x_lbl)
         self._x_combo = QComboBox()
+        self._x_combo.setFixedHeight(20)
         for k, cfg in INPUT_CONFIG.items():
             lbl = f"{cfg['label']} ({cfg['unit']})" if cfg['unit'] else cfg['label']
             self._x_combo.addItem(lbl, k)
         self._x_combo.setCurrentIndex(input_keys.index('speed'))
         header.addWidget(self._x_combo, stretch=1)
 
-        # Y — input in 3D mode, output in 2D mode
         self._y_label = QLabel("Y:")
+        self._y_label.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
         header.addWidget(self._y_label)
         self._y_combo = QComboBox()
+        self._y_combo.setFixedHeight(20)
         header.addWidget(self._y_combo, stretch=1)
 
-        # Z — output, only visible in 3D mode
         self._z_label = QLabel("Z:")
+        self._z_label.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
         header.addWidget(self._z_label)
         self._z_combo = QComboBox()
+        self._z_combo.setFixedHeight(20)
         for k, cfg in OUTPUT_CONFIG.items():
             lbl = f"{cfg['label']} ({cfg['unit']})" if cfg['unit'] else cfg['label']
             self._z_combo.addItem(lbl, k)
@@ -82,24 +209,22 @@ class GraphPanel(QWidget):
 
         outer.addLayout(header)
 
-        # Canvas
         self._figure = Figure(tight_layout=True)
-        self._figure.patch.set_facecolor('#FAFAFA')
+        self._figure.patch.set_facecolor(_BG)
         self._canvas = FigureCanvasQTAgg(self._figure)
+        self._canvas.setStyleSheet(f"background: {_BG};")
         self._canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         outer.addWidget(self._canvas, stretch=1)
 
         self._inputs = None
         self._results = None
 
-        # Build Y combo contents and show/hide Z for initial mode
         self._apply_mode_layout()
 
         self._x_combo.currentIndexChanged.connect(self._request_redraw)
         self._y_combo.currentIndexChanged.connect(self._request_redraw)
         self._z_combo.currentIndexChanged.connect(self._request_redraw)
 
-    # ---- mode switching ----
     def _toggle_mode(self):
         self._mode = '3d' if self._mode == '2d' else '2d'
         self._mode_btn.setChecked(self._mode == '3d')
@@ -111,30 +236,24 @@ class GraphPanel(QWidget):
         self._mode_btn.setText('3D' if self._mode == '3d' else '2D')
 
     def _apply_mode_layout(self):
-        """Rebuild Y combo for the current mode, show/hide Z row."""
         self._y_combo.blockSignals(True)
         self._y_combo.clear()
         if self._mode == '3d':
-            # Y = input
             for k, cfg in INPUT_CONFIG.items():
                 lbl = f"{cfg['label']} ({cfg['unit']})" if cfg['unit'] else cfg['label']
                 self._y_combo.addItem(lbl, k)
-            # default to 'mass' for the Y axis
-            idx = list(INPUT_CONFIG.keys()).index('mass')
-            self._y_combo.setCurrentIndex(idx)
+            self._y_combo.setCurrentIndex(list(INPUT_CONFIG.keys()).index('mass'))
             self._z_label.show()
             self._z_combo.show()
         else:
-            # Y = output
             for k, cfg in OUTPUT_CONFIG.items():
                 lbl = f"{cfg['label']} ({cfg['unit']})" if cfg['unit'] else cfg['label']
                 self._y_combo.addItem(lbl, k)
-            self._y_combo.setCurrentIndex(0)  # extra_mass first
+            self._y_combo.setCurrentIndex(0)
             self._z_label.hide()
             self._z_combo.hide()
         self._y_combo.blockSignals(False)
 
-    # ---- drawing ----
     def _request_redraw(self):
         if self._inputs is not None:
             self.update_graph(self._inputs, self._results)
@@ -147,6 +266,14 @@ class GraphPanel(QWidget):
         else:
             self._draw_3d(inputs, results)
 
+    def _style_axes(self, ax):
+        ax.set_facecolor(_SURFACE)
+        ax.tick_params(colors=_SUBTEXT, labelsize=7)
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_BORDER)
+        ax.xaxis.label.set_color(_SUBTEXT)
+        ax.yaxis.label.set_color(_SUBTEXT)
+
     def _draw_2d(self, inputs, results):
         x_key = self._x_combo.currentData()
         y_key = self._y_combo.currentData()
@@ -156,12 +283,12 @@ class GraphPanel(QWidget):
         x_vals, y_vals = calculator.sweep(inputs, x_key, y_key)
 
         self._figure.clear()
+        self._figure.patch.set_facecolor(_BG)
         ax = self._figure.add_subplot(111)
-        ax.set_facecolor('#FAFAFA')
+        self._style_axes(ax)
 
         valid = np.isfinite(y_vals)
 
-        # Zone background bands
         zone_key = OUTPUT_CONFIG[y_key]['zones']
         if zone_key and valid.any():
             y_data_min, y_data_max = float(np.nanmin(y_vals)), float(np.nanmax(y_vals))
@@ -170,33 +297,35 @@ class GraphPanel(QWidget):
                 lo_c = max(lo, y_data_min - yr * 0.2)
                 hi_c = min(hi, y_data_max + yr * 0.2)
                 if hi_c > lo_c:
-                    ax.axhspan(lo_c, hi_c, color=bg, alpha=0.15, zorder=0)
+                    ax.axhspan(lo_c, hi_c, color=bg, alpha=0.12, zorder=0)
 
         if valid.any():
-            ax.plot(x_vals[valid], y_vals[valid], color='#1565C0', linewidth=2, zorder=2)
+            ax.plot(x_vals[valid], y_vals[valid], color=_ACCENT, linewidth=2, zorder=2)
 
         x_cur = inputs[x_key]
-        ax.axvline(x_cur, color='#E65100', linestyle='--', linewidth=1.5,
-                   label='Current', zorder=3, alpha=0.85)
+        ax.axvline(x_cur, color=_ACCENT2, linestyle='--', linewidth=1.5,
+                   label='Current', zorder=3, alpha=0.9)
         y_cur = results.get(y_key, float('nan'))
         if math.isfinite(y_cur):
-            ax.scatter([x_cur], [y_cur], color='#E65100', s=50, zorder=4)
+            ax.scatter([x_cur], [y_cur], color=_ACCENT2, s=45, zorder=4, edgecolors='none')
 
         x_cfg = INPUT_CONFIG[x_key]
         y_cfg = OUTPUT_CONFIG[y_key]
         ax.set_xlabel(f"{x_cfg['label']} ({x_cfg['unit']})" if x_cfg['unit'] else x_cfg['label'], fontsize=8)
         ax.set_ylabel(f"{y_cfg['label']} ({y_cfg['unit']})" if y_cfg['unit'] else y_cfg['label'], fontsize=8)
-        ax.tick_params(labelsize=7)
-        ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=7)
+        ax.grid(True, alpha=0.15, color=_SUBTEXT)
+        legend = ax.legend(fontsize=7, facecolor=_OVERLAY, edgecolor=_BORDER, labelcolor=_TEXT)
 
         xmin, xmax = float(x_vals[0]), float(x_vals[-1])
         xr = xmax - xmin if xmax != xmin else abs(xmax) * 0.2 + 0.01
         ax.set_xlim(xmin - xr * 0.03, xmax + xr * 0.03)
         if valid.any():
             ymin, ymax = float(np.nanmin(y_vals)), float(np.nanmax(y_vals))
-            yr = ymax - ymin if ymax != ymin else abs(ymax) * 0.2 + 0.01
-            ax.set_ylim(ymin - yr * 0.15, ymax + yr * 0.15)
+            y_center = (ymin + ymax) / 2
+            data_range = ymax - ymin if ymax != ymin else abs(y_center) * 0.1 + 0.01
+            # Span proportional to absolute value so true angle is preserved, data centered
+            y_half = max(data_range * 0.6, abs(y_center) * 0.25)
+            ax.set_ylim(y_center - y_half, y_center + y_half)
 
         self._canvas.draw()
 
@@ -210,7 +339,9 @@ class GraphPanel(QWidget):
         x_vals, y_vals, z_grid = calculator.sweep2d(inputs, x_key, y_key, z_key)
 
         self._figure.clear()
+        self._figure.patch.set_facecolor(_BG)
         ax = self._figure.add_subplot(111)
+        self._style_axes(ax)
 
         valid = np.isfinite(z_grid)
         cmap = self._ZONE_CMAP.get(z_key, self._DEFAULT_CMAP)
@@ -227,17 +358,18 @@ class GraphPanel(QWidget):
             z_cfg = OUTPUT_CONFIG[z_key]
             cb.set_label(
                 f"{z_cfg['label']} ({z_cfg['unit']})" if z_cfg['unit'] else z_cfg['label'],
-                fontsize=7)
-            cb.ax.tick_params(labelsize=7)
+                fontsize=7, color=_SUBTEXT)
+            cb.ax.tick_params(colors=_SUBTEXT, labelsize=7)
+            cb.outline.set_edgecolor(_BORDER)
         else:
             ax.text(0.5, 0.5, 'No valid data', transform=ax.transAxes,
-                    ha='center', va='center', color='#888')
+                    ha='center', va='center', color=_MUTED)
 
         x_cur, y_cur = inputs[x_key], inputs[y_key]
-        ax.axvline(x_cur, color='white', linewidth=1.2, linestyle='--', alpha=0.85, zorder=3)
-        ax.axhline(y_cur, color='white', linewidth=1.2, linestyle='--', alpha=0.85, zorder=3)
-        ax.scatter([x_cur], [y_cur], color='white', s=50, zorder=4,
-                   edgecolors='#333', linewidth=0.8)
+        ax.axvline(x_cur, color='white', linewidth=1.0, linestyle='--', alpha=0.7, zorder=3)
+        ax.axhline(y_cur, color='white', linewidth=1.0, linestyle='--', alpha=0.7, zorder=3)
+        ax.scatter([x_cur], [y_cur], color='white', s=40, zorder=4,
+                   edgecolors=_BORDER, linewidth=0.8)
 
         ax.set_xlim(x_vals[0], x_vals[-1])
         ax.set_ylim(y_vals[0], y_vals[-1])
@@ -246,19 +378,15 @@ class GraphPanel(QWidget):
         y_cfg = INPUT_CONFIG[y_key]
         ax.set_xlabel(f"{x_cfg['label']} ({x_cfg['unit']})" if x_cfg['unit'] else x_cfg['label'], fontsize=8)
         ax.set_ylabel(f"{y_cfg['label']} ({y_cfg['unit']})" if y_cfg['unit'] else y_cfg['label'], fontsize=8)
-        ax.tick_params(labelsize=7)
 
         self._canvas.draw()
 
 
-# ------------------------------------------------------------------ #
-# Main window
-# ------------------------------------------------------------------ #
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Electric Aircraft Design Calculator")
-        self.setMinimumSize(1350, 780)
+        self.setMinimumSize(1200, 720)
 
         self._inputs: dict = calculator.default_inputs()
         self._results: dict = {}
@@ -275,43 +403,40 @@ class MainWindow(QMainWindow):
         root.setSpacing(8)
 
         root.addWidget(self._build_input_panel(), stretch=2)
-        root.addWidget(self._build_output_panel(), stretch=5)
+        root.addWidget(self._build_output_panel(), stretch=8)
 
         self._recalculate()
 
-    # ------------------------------------------------------------------ #
-    # Input panel
-    # ------------------------------------------------------------------ #
     def _build_input_panel(self) -> QScrollArea:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setMinimumWidth(360)
-        scroll.setMaximumWidth(430)
+        scroll.setMinimumWidth(240)
+        scroll.setMaximumWidth(290)
 
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setSpacing(3)
+        layout.setSpacing(2)
         layout.setContentsMargins(4, 4, 4, 4)
 
         title = QLabel("Design Parameters")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; padding: 4px 2px;")
+        title.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {_TEXT}; padding: 4px 2px 2px 2px;")
         layout.addWidget(title)
         layout.addWidget(self._separator())
 
         groups = [
-            ("Airframe",          ['mass', 'speed', 'density']),
-            ("Aerodynamics",      ['e', 'AR', 'cd0']),
-            ("Propulsion",        ['motor_efficiency', 'n', 'd']),
-            ("Power",             ['battery_density', 'flight_time', 'avionics_power']),
-            ("Component Masses",  ['m_avionics', 'm_motor']),
+            ("Airframe",         ['mass', 'speed', 'density']),
+            ("Aerodynamics",     ['e', 'AR', 'cd0']),
+            ("Propulsion",       ['motor_efficiency', 'n', 'd']),
+            ("Power",            ['battery_density', 'flight_time', 'avionics_power']),
+            ("Component Masses", ['m_avionics', 'm_motor']),
         ]
 
         for group_name, keys in groups:
             grp_label = QLabel(group_name)
             grp_label.setStyleSheet(
-                "font-size: 11px; font-weight: bold; color: #555; "
-                "padding: 4px 2px 2px 2px;"
+                f"font-size: 10px; font-weight: bold; color: {_ACCENT}; "
+                "padding: 4px 2px 1px 2px; background: transparent;"
             )
             layout.addWidget(grp_label)
             for key in keys:
@@ -326,16 +451,17 @@ class MainWindow(QMainWindow):
         cfg = INPUT_CONFIG[key]
         widget = QWidget()
         row = QHBoxLayout(widget)
-        row.setContentsMargins(2, 1, 2, 1)
-        row.setSpacing(5)
+        row.setContentsMargins(2, 0, 2, 0)
+        row.setSpacing(4)
 
         name_lbl = QLabel(cfg['label'])
-        name_lbl.setFixedWidth(128)
+        name_lbl.setFixedWidth(108)
+        name_lbl.setStyleSheet(f"color: {_TEXT}; font-size: 11px; background: transparent;")
         name_lbl.setToolTip(f"Unit: {cfg['unit'] or '—'}")
 
         unit_lbl = QLabel(cfg['unit'])
-        unit_lbl.setFixedWidth(42)
-        unit_lbl.setStyleSheet("color: #666; font-size: 11px;")
+        unit_lbl.setFixedWidth(30)
+        unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
         unit_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         spinbox = QDoubleSpinBox()
@@ -343,7 +469,8 @@ class MainWindow(QMainWindow):
         spinbox.setSingleStep(cfg['step'])
         spinbox.setDecimals(cfg['decimals'])
         spinbox.setValue(cfg['default'])
-        spinbox.setFixedWidth(88)
+        spinbox.setFixedWidth(76)
+        spinbox.setFixedHeight(22)
         spinbox.setAlignment(Qt.AlignRight)
 
         n_steps = round((cfg['max'] - cfg['min']) / cfg['step'])
@@ -351,6 +478,7 @@ class MainWindow(QMainWindow):
         slider.setRange(0, n_steps)
         slider.setValue(round((cfg['default'] - cfg['min']) / cfg['step']))
         slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        slider.setFixedHeight(22)
 
         self._spinboxes[key] = spinbox
         self._sliders[key] = slider
@@ -364,28 +492,23 @@ class MainWindow(QMainWindow):
         row.addWidget(slider, stretch=1)
         return widget
 
-    # ------------------------------------------------------------------ #
-    # Output panel
-    # ------------------------------------------------------------------ #
     def _build_output_panel(self) -> QWidget:
         panel = QWidget()
         vbox = QVBoxLayout(panel)
         vbox.setSpacing(6)
         vbox.setContentsMargins(0, 0, 0, 0)
 
-        # ---- Outputs grid ----
         outputs_group = QGroupBox("Calculated Outputs")
-        outputs_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         grid = QGridLayout(outputs_group)
-        grid.setSpacing(3)
-        grid.setContentsMargins(8, 8, 8, 8)
+        grid.setSpacing(2)
+        grid.setContentsMargins(8, 10, 8, 6)
 
         priority = ['extra_mass', 'mass_ratio', 'ld_max', 'J']
         rest = [k for k in OUTPUT_CONFIG if k not in priority]
         ordered = priority + rest
 
         col_sets = [(0, 1, 2), (4, 5, 6)]
-        grid.setColumnMinimumWidth(3, 16)
+        grid.setColumnMinimumWidth(3, 12)
         for col, stretch in [(0, 3), (1, 2), (2, 1), (3, 0), (4, 3), (5, 2), (6, 1)]:
             grid.setColumnStretch(col, stretch)
 
@@ -397,48 +520,50 @@ class MainWindow(QMainWindow):
 
             name_lbl = QLabel(cfg['label'])
             name_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            name_lbl.setStyleSheet(f"color: {_SUBTEXT}; font-size: 11px; background: transparent;")
 
             val_lbl = QLabel("---")
             val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            val_lbl.setMinimumWidth(78)
+            val_lbl.setMinimumWidth(72)
+            val_lbl.setFixedHeight(20)
             val_lbl.setFont(QFont("monospace"))
             val_lbl.setStyleSheet(
-                "background: #F5F5F5; border: 1px solid #DDD; "
-                "border-radius: 3px; padding: 1px 5px;"
+                f"background: {_OVERLAY}; color: {_SUBTEXT}; "
+                f"border: 1px solid {_BORDER}; border-radius: 3px; padding: 0px 4px;"
             )
 
             unit_lbl = QLabel(cfg['unit'])
             unit_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            unit_lbl.setStyleSheet("color: #666; font-size: 11px;")
+            unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
 
             grid.addWidget(name_lbl, row_idx, cols[0])
             grid.addWidget(val_lbl,  row_idx, cols[1])
             grid.addWidget(unit_lbl, row_idx, cols[2])
             self._output_labels[key] = val_lbl
 
-        vbox.addWidget(outputs_group, stretch=2)
+        outputs_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        vbox.addWidget(outputs_group, stretch=0)
 
-        # ---- Graph area ----
         graph_outer = QGroupBox("Sensitivity Analysis")
-        graph_outer.setStyleSheet("QGroupBox { font-weight: bold; }")
         graph_outer_vbox = QVBoxLayout(graph_outer)
-        graph_outer_vbox.setContentsMargins(6, 6, 6, 6)
+        graph_outer_vbox.setContentsMargins(6, 10, 6, 6)
         graph_outer_vbox.setSpacing(4)
 
-        # Toolbar: graph count selector
         toolbar = QHBoxLayout()
         toolbar.addStretch()
-        toolbar.addWidget(QLabel("Graphs:"))
+        count_lbl = QLabel("Graphs:")
+        count_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
+        toolbar.addWidget(count_lbl)
         self._graph_count_spin = QSpinBox()
         self._graph_count_spin.setRange(1, 6)
         self._graph_count_spin.setValue(2)
-        self._graph_count_spin.setFixedWidth(52)
+        self._graph_count_spin.setFixedWidth(48)
+        self._graph_count_spin.setFixedHeight(22)
         self._graph_count_spin.setAlignment(Qt.AlignCenter)
         self._graph_count_spin.valueChanged.connect(self._set_graph_count)
         toolbar.addWidget(self._graph_count_spin)
         graph_outer_vbox.addLayout(toolbar)
 
-        # Grid container — no scroll, panels always fill the space
         self._graphs_container = QWidget()
         self._graphs_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._graphs_grid = QGridLayout(self._graphs_container)
@@ -448,10 +573,8 @@ class MainWindow(QMainWindow):
         self._graphs_grid.setColumnStretch(1, 1)
 
         graph_outer_vbox.addWidget(self._graphs_container, stretch=1)
+        vbox.addWidget(graph_outer, stretch=5)
 
-        vbox.addWidget(graph_outer, stretch=3)
-
-        # Default two panels: speed×mass→extra_mass (3D), speed→ld_max (2D)
         self._set_graph_count(2)
         p1 = self._graph_panels[1]
         p1._mode_btn.setChecked(False)
@@ -462,9 +585,6 @@ class MainWindow(QMainWindow):
 
         return panel
 
-    # ------------------------------------------------------------------ #
-    # Graph management
-    # ------------------------------------------------------------------ #
     _COLS = 2
 
     def _set_graph_count(self, count: int):
@@ -478,11 +598,9 @@ class MainWindow(QMainWindow):
             panel.setParent(None)
             panel.deleteLater()
         self._reflow_graphs()
-        # Defer redraw until Qt has finished resizing the remaining panels
         QTimer.singleShot(0, self._update_all_graphs)
 
     def _reflow_graphs(self):
-        # Remove all items from the grid without deleting widgets
         while self._graphs_grid.count():
             item = self._graphs_grid.takeAt(0)
             if item.widget():
@@ -491,9 +609,8 @@ class MainWindow(QMainWindow):
         cols = self._COLS
         n = len(self._graph_panels)
         n_rows = math.ceil(n / cols) if n > 0 else 1
-        max_rows = math.ceil(6 / cols)  # 6 is the spinbox maximum
+        max_rows = math.ceil(6 / cols)
 
-        # Reset every possible row to 0 first, then set only active rows
         for row in range(max_rows):
             self._graphs_grid.setRowStretch(row, 0)
         for row in range(n_rows):
@@ -501,7 +618,6 @@ class MainWindow(QMainWindow):
 
         for i, panel in enumerate(self._graph_panels):
             row, col = divmod(i, cols)
-            # Last panel on an odd count spans both columns
             if i == n - 1 and n % cols != 0:
                 self._graphs_grid.addWidget(panel, row, 0, 1, cols)
             else:
@@ -511,9 +627,6 @@ class MainWindow(QMainWindow):
         for panel in self._graph_panels:
             panel.update_graph(self._inputs, self._results)
 
-    # ------------------------------------------------------------------ #
-    # Signal handlers
-    # ------------------------------------------------------------------ #
     def _on_slider_changed(self, key: str, int_val: int):
         if self._updating:
             return
@@ -537,9 +650,6 @@ class MainWindow(QMainWindow):
         self._inputs[key] = fval
         self._recalculate()
 
-    # ------------------------------------------------------------------ #
-    # Calculation + display
-    # ------------------------------------------------------------------ #
     def _recalculate(self):
         self._results = calculator.compute(self._inputs)
         self._update_outputs()
@@ -551,20 +661,23 @@ class MainWindow(QMainWindow):
             cfg = OUTPUT_CONFIG[key]
             if not math.isfinite(value):
                 lbl.setText("---")
-                bg, fg = '#F5F5F5', '#333333'
+                lbl.setStyleSheet(
+                    f"background: {_OVERLAY}; color: {_MUTED}; "
+                    f"border: 1px solid {_BORDER}; border-radius: 3px; "
+                    "padding: 0px 4px; font-family: monospace;"
+                )
             else:
                 lbl.setText(format(value, cfg['format']))
                 bg, fg = calculator.get_color(key, value)
-            lbl.setStyleSheet(
-                f"background: {bg}; color: {fg}; "
-                "border: 1px solid #CCC; border-radius: 3px; "
-                "padding: 1px 5px; font-family: monospace;"
-            )
+                lbl.setStyleSheet(
+                    f"background: {bg}; color: {fg}; "
+                    f"border: 1px solid {_BORDER}; border-radius: 3px; "
+                    "padding: 0px 4px; font-family: monospace;"
+                )
 
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _separator() -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("color: #DDD;")
+        line.setStyleSheet(f"color: {_BORDER}; background: {_BORDER};")
         return line
