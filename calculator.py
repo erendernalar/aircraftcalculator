@@ -133,18 +133,13 @@ def sweep2d(inputs: dict, x_key: str, y_key: str, z_key: str, n_points: int = 45
     x_cfg = (ranges or {}).get(x_key, INPUT_CONFIG[x_key])
     y_cfg = (ranges or {}).get(y_key, INPUT_CONFIG[y_key])
 
-    x_cur = inputs[x_key]
-    y_cur = inputs[y_key]
-
-    x_lo = max(x_cur * 0.5, x_cfg['min'])
-    x_hi = min(x_cur * 1.5, x_cfg['max'])
-    y_lo = max(y_cur * 0.5, y_cfg['min'])
-    y_hi = min(y_cur * 1.5, y_cfg['max'])
+    x_lo, x_hi = x_cfg['min'], x_cfg['max']
+    y_lo, y_hi = y_cfg['min'], y_cfg['max']
 
     if x_lo >= x_hi:
-        x_lo, x_hi = x_cfg['min'], x_cfg['max']
+        x_lo, x_hi = INPUT_CONFIG[x_key]['min'], INPUT_CONFIG[x_key]['max']
     if y_lo >= y_hi:
-        y_lo, y_hi = y_cfg['min'], y_cfg['max']
+        y_lo, y_hi = INPUT_CONFIG[y_key]['min'], INPUT_CONFIG[y_key]['max']
 
     x_vals = np.linspace(x_lo, x_hi, n_points)
     y_vals = np.linspace(y_lo, y_hi, n_points)
@@ -162,12 +157,9 @@ def sweep2d(inputs: dict, x_key: str, y_key: str, z_key: str, n_points: int = 45
 
 def sweep(inputs: dict, x_key: str, y_key: str, n_points: int = 200, ranges: dict = None):
     cfg = (ranges or {}).get(x_key, INPUT_CONFIG[x_key])
-    x_current = inputs[x_key]
-    x_lo = max(x_current * 0.5, cfg['min'])
-    x_hi = min(x_current * 1.5, cfg['max'])
+    x_lo, x_hi = cfg['min'], cfg['max']
     if x_lo >= x_hi:
-        x_lo = cfg['min']
-        x_hi = cfg['max']
+        x_lo, x_hi = INPUT_CONFIG[x_key]['min'], INPUT_CONFIG[x_key]['max']
 
     x_vals = np.linspace(x_lo, x_hi, n_points)
     y_vals = np.full(n_points, np.nan)
