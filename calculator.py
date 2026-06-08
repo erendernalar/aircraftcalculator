@@ -128,10 +128,10 @@ def compute(inputs: dict) -> dict:
         return dict(_NAN_OUTPUTS)
 
 
-def sweep2d(inputs: dict, x_key: str, y_key: str, z_key: str, n_points: int = 45):
+def sweep2d(inputs: dict, x_key: str, y_key: str, z_key: str, n_points: int = 45, ranges: dict = None):
     """Sweep two inputs over a grid and return z values as a 2D array."""
-    x_cfg = INPUT_CONFIG[x_key]
-    y_cfg = INPUT_CONFIG[y_key]
+    x_cfg = (ranges or {}).get(x_key, INPUT_CONFIG[x_key])
+    y_cfg = (ranges or {}).get(y_key, INPUT_CONFIG[y_key])
 
     x_cur = inputs[x_key]
     y_cur = inputs[y_key]
@@ -160,8 +160,8 @@ def sweep2d(inputs: dict, x_key: str, y_key: str, z_key: str, n_points: int = 45
     return x_vals, y_vals, z_grid
 
 
-def sweep(inputs: dict, x_key: str, y_key: str, n_points: int = 200):
-    cfg = INPUT_CONFIG[x_key]
+def sweep(inputs: dict, x_key: str, y_key: str, n_points: int = 200, ranges: dict = None):
+    cfg = (ranges or {}).get(x_key, INPUT_CONFIG[x_key])
     x_current = inputs[x_key]
     x_lo = max(x_current * 0.5, cfg['min'])
     x_hi = min(x_current * 1.5, cfg['max'])

@@ -252,6 +252,7 @@ class GraphPanel(QWidget):
 
         self._inputs = None
         self._results = None
+        self._param_ranges = None
         self._apply_mode_layout()
 
         self._x_combo.currentIndexChanged.connect(self._request_redraw)
@@ -289,11 +290,12 @@ class GraphPanel(QWidget):
 
     def _request_redraw(self):
         if self._inputs is not None:
-            self.update_graph(self._inputs, self._results)
+            self.update_graph(self._inputs, self._results, self._param_ranges)
 
-    def update_graph(self, inputs: dict, results: dict):
+    def update_graph(self, inputs: dict, results: dict, param_ranges: dict = None):
         self._inputs = inputs
         self._results = results
+        self._param_ranges = param_ranges
         if self._mode == '2d':
             self._draw_2d(inputs, results)
         else:
@@ -313,7 +315,7 @@ class GraphPanel(QWidget):
         if None in (x_key, y_key):
             return
 
-        x_vals, y_vals = calculator.sweep(inputs, x_key, y_key)
+        x_vals, y_vals = calculator.sweep(inputs, x_key, y_key, ranges=self._param_ranges)
 
         self._figure.clear()
         self._figure.patch.set_facecolor(_BG)
@@ -368,7 +370,7 @@ class GraphPanel(QWidget):
         if None in (x_key, y_key, z_key):
             return
 
-        x_vals, y_vals, z_grid = calculator.sweep2d(inputs, x_key, y_key, z_key)
+        x_vals, y_vals, z_grid = calculator.sweep2d(inputs, x_key, y_key, z_key, ranges=self._param_ranges)
 
         self._figure.clear()
         self._figure.patch.set_facecolor(_BG)
@@ -676,6 +678,7 @@ class MainWindow(QMainWindow):
         cur = max(new_min, min(new_max, self._inputs[key]))
         slider.setValue(max(0, min(round((cur - new_min) / new_step), n_steps)))
         slider.blockSignals(False)
+        self._recalculate_full()
 
     # ------------------------------------------------------------------ #
     # Output panel
@@ -784,7 +787,7 @@ class MainWindow(QMainWindow):
             panel = GraphPanel(mode='3d')
             self._graph_panels.append(panel)
             if self._results:
-                panel.update_graph(self._inputs, self._results)
+                panel.update_graph(self._inputs, self._results, self._param_ranges)
         while len(self._graph_panels) > count:
             panel = self._graph_panels.pop()
             panel.setParent(None)
@@ -817,7 +820,7 @@ class MainWindow(QMainWindow):
 
     def _update_all_graphs(self):
         for panel in self._graph_panels:
-            panel.update_graph(self._inputs, self._results)
+            panel.update_graph(self._inputs, self._results, self._param_ranges)
 
     # ------------------------------------------------------------------ #
     # Signal handlers
