@@ -243,6 +243,16 @@ class GraphPanel(QWidget):
         self._z_combo.setCurrentIndex(output_keys.index('extra_mass'))
         header.addWidget(self._z_combo, stretch=1)
 
+        self._cmap_label = QLabel("Color:")
+        self._cmap_label.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
+        header.addWidget(self._cmap_label)
+        self._cmap_combo = QComboBox()
+        self._cmap_combo.setFixedHeight(20)
+        for name in ['viridis', 'plasma', 'inferno', 'magma', 'RdYlGn', 'coolwarm', 'Spectral', 'jet', 'hot', 'Blues']:
+            self._cmap_combo.addItem(name)
+        self._cmap_combo.setCurrentText('RdYlGn')
+        header.addWidget(self._cmap_combo, stretch=1)
+
         outer.addLayout(header)
 
         self._figure = Figure(tight_layout=True)
@@ -261,6 +271,7 @@ class GraphPanel(QWidget):
         self._x_combo.currentIndexChanged.connect(self._request_redraw)
         self._y_combo.currentIndexChanged.connect(self._request_redraw)
         self._z_combo.currentIndexChanged.connect(self._request_redraw)
+        self._cmap_combo.currentIndexChanged.connect(self._request_redraw)
 
     def _toggle_mode(self):
         self._mode = '3d' if self._mode == '2d' else '2d'
@@ -282,6 +293,8 @@ class GraphPanel(QWidget):
             self._y_combo.setCurrentIndex(list(INPUT_CONFIG.keys()).index('mass'))
             self._z_label.show()
             self._z_combo.show()
+            self._cmap_label.show()
+            self._cmap_combo.show()
         else:
             for k, cfg in OUTPUT_CONFIG.items():
                 lbl = f"{cfg['label']} ({cfg['unit']})" if cfg['unit'] else cfg['label']
@@ -289,6 +302,8 @@ class GraphPanel(QWidget):
             self._y_combo.setCurrentIndex(0)
             self._z_label.hide()
             self._z_combo.hide()
+            self._cmap_label.hide()
+            self._cmap_combo.hide()
         self._y_combo.blockSignals(False)
 
     def _on_canvas_click(self, event):
@@ -396,7 +411,7 @@ class GraphPanel(QWidget):
         self._style_axes(ax)
 
         valid = np.isfinite(z_grid)
-        cmap = self._ZONE_CMAP.get(z_key, self._DEFAULT_CMAP)
+        cmap = self._cmap_combo.currentText()
 
         if valid.any():
             vmin = float(np.nanmin(z_grid))
