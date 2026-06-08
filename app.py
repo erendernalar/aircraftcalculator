@@ -1,10 +1,11 @@
+import json
 import math
 
 import numpy as np
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QGroupBox,
+    QAction, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QScrollArea, QSpinBox,
     QSizePolicy, QSlider, QVBoxLayout, QWidget,
 )
@@ -438,6 +439,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_input_panel(), stretch=0)
         root.addWidget(self._build_output_panel(), stretch=1)
 
+        self._build_menu()
         self._recalculate()
 
     # ------------------------------------------------------------------ #
@@ -840,3 +842,81 @@ class MainWindow(QMainWindow):
                     f"border: 1px solid {_BORDER}; border-radius: 3px; "
                     "padding: 0px 4px; font-family: monospace;"
                 )
+
+    # ------------------------------------------------------------------ #
+    # File menu
+    # ------------------------------------------------------------------ #
+    def _build_menu(self):
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+
+        save_action = QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self._save_state)
+        file_menu.addAction(save_action)
+
+        load_action = QAction("Load", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self._load_state)
+        file_menu.addAction(load_action)
+
+    def _save_state(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save State", "", "Aircraft Calculator (*.acalc);;All Files (*)"
+        )
+        if not path:
+            return
+        if not path.endswith(".acalc"):
+            path += ".acalc"
+        state = {
+            "inputs": self._inputs,
+            "param_ranges": self._param_ranges,
+        }
+        with open(path, "w") as f:
+            json.dump(state, f, indent=2)
+
+    def _load_state(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load State", "", "Aircraft Calculator (*.acalc);;All Files (*)"
+        )
+        if not path:
+            return
+        with open(path) as f:
+            state = json.load(f)
+        if "inputs" in state:
+            self._inputs.update(state["inputs"])
+        if "param_ranges" in state:
+            self._param_ranges.update(state["param_ranges"])
+        self._sync_ui_from_state()
+        self._recalculate_full()
+
+    def _sync_ui_from_state(self):
+        self._updating = True
+        for key in INPUT_CONFIG:
+            r = self._param_ranges[key]
+            cfg = INPUT_CONFIG[key]
+            val = self._inputs.get(key, cfg['default'])
+
+            min_spin  = self._range_mins[key]
+            max_spin  = self._range_maxs[key]
+            step_spin = self._range_steps[key]
+            min_spin.blockSignals(True)
+            max_spin.blockSignals(True)
+            step_spin.blockSignals(True)
+            min_spin.setValue(r['min'])
+            max_spin.setValue(r['max'])
+            step_spin.setValue(r['step'])
+            min_spin.blockSignals(False)
+            max_spin.blockSignals(False)
+            step_spin.blockSignals(False)
+
+            n_steps = min(10000, max(1, round((r['max'] - r['min']) / r['step'])))
+            int_val = max(0, min(round((val - r['min']) / r['step']), n_steps))
+            slider = self._sliders[key]
+            slider.blockSignals(True)
+            slider.setRange(0, n_steps)
+            slider.setValue(int_val)
+            slider.blockSignals(False)
+
+            self._value_edits[key].setText(format(val, ".2f"))
+        self._updating = False
