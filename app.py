@@ -420,8 +420,12 @@ class GraphPanel(QWidget):
             if vmin == vmax:
                 vmin -= 0.5
                 vmax += 0.5
-            pcm = ax.pcolormesh(x_vals, y_vals, z_grid,
-                                cmap=cmap, vmin=vmin, vmax=vmax, shading='gouraud')
+            levels = np.linspace(vmin, vmax, 21)
+            XX, YY = np.meshgrid(x_vals, y_vals)
+            pcm = ax.contourf(XX, YY, z_grid, levels=levels, cmap=cmap)
+            iso = ax.contour(XX, YY, z_grid, levels=levels, colors='white',
+                             linewidths=0.6, alpha=0.5)
+            ax.clabel(iso, inline=True, fontsize=6, fmt='%.3g', colors='white')
             cb = self._figure.colorbar(pcm, ax=ax, fraction=0.046, pad=0.04)
             z_cfg = OUTPUT_CONFIG[z_key]
             cb.set_label(
