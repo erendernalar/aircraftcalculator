@@ -7,7 +7,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QScrollArea, QSpinBox,
-    QSizePolicy, QSlider, QVBoxLayout, QWidget,
+    QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
@@ -151,6 +151,18 @@ QScrollBar::handle:horizontal {{
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 QLabel {{ background: transparent; }}
 """
+
+
+class _JumpSlider(QSlider):
+    """QSlider that jumps directly to the clicked position instead of paging."""
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            val = QStyle.sliderValueFromPosition(
+                self.minimum(), self.maximum(),
+                event.x(), self.width()
+            )
+            self.setValue(val)
+        super().mousePressEvent(event)
 
 
 class _FocusSpinBox(QDoubleSpinBox):
@@ -544,7 +556,7 @@ class MainWindow(QMainWindow):
         slider_row.setContentsMargins(0, 0, 0, 0)
 
         n_steps = round((cfg['max'] - cfg['min']) / cfg['step'])
-        slider = QSlider(Qt.Horizontal)
+        slider = _JumpSlider(Qt.Horizontal)
         slider.setRange(0, n_steps)
         slider.setValue(round((cfg['default'] - cfg['min']) / cfg['step']))
         slider.setFixedHeight(18)
