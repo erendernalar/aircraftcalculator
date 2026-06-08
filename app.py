@@ -6,8 +6,8 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
-    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QScrollArea, QSpinBox,
-    QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea,
+    QSpinBox, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
@@ -919,6 +919,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     def _build_menu(self):
         menu_bar = self.menuBar()
+
         file_menu = menu_bar.addMenu("File")
 
         save_action = QAction("Save", self)
@@ -930,6 +931,23 @@ class MainWindow(QMainWindow):
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self._load_state)
         file_menu.addAction(load_action)
+
+        info_menu = menu_bar.addMenu("Info")
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self._show_about)
+        info_menu.addAction(about_action)
+
+    def _show_about(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("About")
+        msg.setText(
+            "<b>Electric Aircraft Design Calculator</b><br><br>"
+            "Developed by <b>Ensar Öztürk</b><br>"
+            "<a href='mailto:ensarr.ozturk@gmail.com'>ensarr.ozturk@gmail.com</a>"
+        )
+        msg.setIcon(QMessageBox.Information)
+        msg.exec_()
 
     def _save_state(self):
         path, _ = QFileDialog.getSaveFileName(
