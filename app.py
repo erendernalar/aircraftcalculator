@@ -1,11 +1,11 @@
 import math
 
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QGroupBox,
-    QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea, QSpinBox,
+    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QScrollArea, QSpinBox,
     QSizePolicy, QSlider, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
@@ -59,10 +59,21 @@ QDoubleSpinBox, QSpinBox {{
 }}
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
 QSpinBox::up-button, QSpinBox::down-button {{
-    width: 14px;
+    width: 16px;
     background: {_BORDER};
-    border: none;
-    border-radius: 2px;
+    border-left: 1px solid {_ACCENT};
+    subcontrol-origin: border;
+}}
+QDoubleSpinBox::up-button, QSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-bottom: 1px solid {_BG};
+}}
+QDoubleSpinBox::down-button, QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+}}
+QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover,
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background: {_ACCENT};
 }}
 QComboBox {{
     background: {_OVERLAY};
@@ -83,21 +94,20 @@ QComboBox QAbstractItemView {{
     border: 1px solid {_BORDER};
 }}
 QSlider::groove:horizontal {{
-    height: 3px;
+    height: 4px;
     background: {_OVERLAY};
     border-radius: 2px;
 }}
 QSlider::handle:horizontal {{
     background: {_ACCENT};
-    width: 10px;
-    height: 10px;
-    margin: -4px 0;
-    border-radius: 5px;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
 }}
 QSlider::sub-page:horizontal {{
     background: {_ACCENT};
     border-radius: 2px;
-    opacity: 0.6;
 }}
 QPushButton {{
     background: {_OVERLAY};
@@ -142,6 +152,18 @@ QLabel {{ background: transparent; }}
 """
 
 
+class _FocusSpinBox(QDoubleSpinBox):
+    """QDoubleSpinBox that emits a signal when it receives focus."""
+    focused = pyqtSignal()
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.focused.emit()
+
+
+# ------------------------------------------------------------------ #
+# Graph panel
+# ------------------------------------------------------------------ #
 class GraphPanel(QWidget):
     _ZONE_CMAP = {
         'extra_mass': 'RdYlGn',
@@ -160,7 +182,6 @@ class GraphPanel(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(2)
 
-        # ---- header ----
         header = QHBoxLayout()
         header.setContentsMargins(2, 2, 2, 0)
         header.setSpacing(4)
@@ -218,7 +239,6 @@ class GraphPanel(QWidget):
 
         self._inputs = None
         self._results = None
-
         self._apply_mode_layout()
 
         self._x_combo.currentIndexChanged.connect(self._request_redraw)
@@ -314,7 +334,7 @@ class GraphPanel(QWidget):
         ax.set_xlabel(f"{x_cfg['label']} ({x_cfg['unit']})" if x_cfg['unit'] else x_cfg['label'], fontsize=8)
         ax.set_ylabel(f"{y_cfg['label']} ({y_cfg['unit']})" if y_cfg['unit'] else y_cfg['label'], fontsize=8)
         ax.grid(True, alpha=0.15, color=_SUBTEXT)
-        legend = ax.legend(fontsize=7, facecolor=_OVERLAY, edgecolor=_BORDER, labelcolor=_TEXT)
+        ax.legend(fontsize=7, facecolor=_OVERLAY, edgecolor=_BORDER, labelcolor=_TEXT)
 
         xmin, xmax = float(x_vals[0]), float(x_vals[-1])
         xr = xmax - xmin if xmax != xmin else abs(xmax) * 0.2 + 0.01
@@ -323,7 +343,6 @@ class GraphPanel(QWidget):
             ymin, ymax = float(np.nanmin(y_vals)), float(np.nanmax(y_vals))
             y_center = (ymin + ymax) / 2
             data_range = ymax - ymin if ymax != ymin else abs(y_center) * 0.1 + 0.01
-            # Span proportional to absolute value so true angle is preserved, data centered
             y_half = max(data_range * 0.6, abs(y_center) * 0.25)
             ax.set_ylim(y_center - y_half, y_center + y_half)
 
@@ -382,6 +401,9 @@ class GraphPanel(QWidget):
         self._canvas.draw()
 
 
+# ------------------------------------------------------------------ #
+# Main window
+# ------------------------------------------------------------------ #
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -391,10 +413,21 @@ class MainWindow(QMainWindow):
         self._inputs: dict = calculator.default_inputs()
         self._results: dict = {}
         self._updating: bool = False
+        self._value_edits: dict = {}
         self._sliders: dict = {}
-        self._spinboxes: dict = {}
+        self._range_mins: dict = {}
+        self._range_maxs: dict = {}
+        self._range_steps: dict = {}
+        self._param_ranges: dict = {
+            k: {'min': cfg['min'], 'max': cfg['max'], 'step': cfg['step']}
+            for k, cfg in INPUT_CONFIG.items()
+        }
         self._output_labels: dict = {}
         self._graph_panels: list = []
+
+        self._recalc_timer = QTimer()
+        self._recalc_timer.setSingleShot(True)
+        self._recalc_timer.timeout.connect(self._recalculate)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -402,27 +435,34 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        root.addWidget(self._build_input_panel(), stretch=2)
-        root.addWidget(self._build_output_panel(), stretch=8)
+        root.addWidget(self._build_input_panel(), stretch=0)
+        root.addWidget(self._build_output_panel(), stretch=1)
 
         self._recalculate()
 
-    def _build_input_panel(self) -> QScrollArea:
+    # ------------------------------------------------------------------ #
+    # Input panel
+    # ------------------------------------------------------------------ #
+    def _build_input_panel(self) -> QWidget:
+        outer = QWidget()
+        outer.setFixedWidth(280)
+        vbox = QVBoxLayout(outer)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(4)
+
+        # Scrollable param list
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setMinimumWidth(240)
-        scroll.setMaximumWidth(290)
 
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setSpacing(2)
+        layout.setSpacing(6)
         layout.setContentsMargins(4, 4, 4, 4)
 
         title = QLabel("Design Parameters")
-        title.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {_TEXT}; padding: 4px 2px 2px 2px;")
+        title.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {_TEXT}; padding: 2px;")
         layout.addWidget(title)
-        layout.addWidget(self._separator())
 
         groups = [
             ("Airframe",         ['mass', 'speed', 'density']),
@@ -433,65 +473,199 @@ class MainWindow(QMainWindow):
         ]
 
         for group_name, keys in groups:
-            grp_label = QLabel(group_name)
-            grp_label.setStyleSheet(
-                f"font-size: 10px; font-weight: bold; color: {_ACCENT}; "
-                "padding: 4px 2px 1px 2px; background: transparent;"
-            )
-            layout.addWidget(grp_label)
-            for key in keys:
-                layout.addWidget(self._build_input_row(key))
-            layout.addWidget(self._separator())
+            layout.addWidget(self._build_group_card(group_name, keys))
 
         layout.addStretch()
         scroll.setWidget(container)
-        return scroll
+        vbox.addWidget(scroll, stretch=1)
+        return outer
+
+    def _build_group_card(self, name: str, keys: list) -> QWidget:
+        card = QWidget()
+        card.setObjectName("groupCard")
+        card.setAutoFillBackground(True)
+        card.setStyleSheet(f"""
+            QWidget#groupCard {{
+                background-color: {_SURFACE};
+                border-radius: 5px;
+                border: 1px solid {_BORDER};
+            }}
+            QWidget#groupCard QWidget {{
+                background-color: transparent;
+            }}
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(5, 4, 5, 4)
+        layout.setSpacing(0)
+
+        header = QLabel(name)
+        header.setStyleSheet(
+            f"color: {_ACCENT}; font-size: 10px; font-weight: bold; "
+            "background: transparent; border: none; padding-bottom: 3px;"
+        )
+        layout.addWidget(header)
+
+        for i, key in enumerate(keys):
+            if i > 0:
+                sep = QFrame()
+                sep.setFrameShape(QFrame.HLine)
+                sep.setStyleSheet(f"background: {_BORDER}; max-height: 1px; border: none; margin: 0px 0px;")
+                layout.addWidget(sep)
+            layout.addWidget(self._build_input_row(key))
+
+        return card
 
     def _build_input_row(self, key: str) -> QWidget:
         cfg = INPUT_CONFIG[key]
         widget = QWidget()
-        row = QHBoxLayout(widget)
-        row.setContentsMargins(2, 0, 2, 0)
-        row.setSpacing(4)
+        widget.setStyleSheet("background: transparent; border: none;")
+        vbox = QVBoxLayout(widget)
+        vbox.setContentsMargins(0, 4, 0, 4)
+        vbox.setSpacing(3)
 
+        # Line 1: label + unit
+        top = QHBoxLayout()
+        top.setSpacing(4)
+        top.setContentsMargins(0, 0, 0, 0)
         name_lbl = QLabel(cfg['label'])
-        name_lbl.setFixedWidth(108)
-        name_lbl.setStyleSheet(f"color: {_TEXT}; font-size: 11px; background: transparent;")
+        name_lbl.setStyleSheet(f"color: {_TEXT}; font-size: 11px;")
         name_lbl.setToolTip(f"Unit: {cfg['unit'] or '—'}")
+        unit_lbl = QLabel(cfg['unit'] or '')
+        unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
+        top.addWidget(name_lbl, stretch=1)
+        top.addWidget(unit_lbl)
+        vbox.addLayout(top)
 
-        unit_lbl = QLabel(cfg['unit'])
-        unit_lbl.setFixedWidth(30)
-        unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
-        unit_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        spinbox = QDoubleSpinBox()
-        spinbox.setRange(cfg['min'], cfg['max'])
-        spinbox.setSingleStep(cfg['step'])
-        spinbox.setDecimals(cfg['decimals'])
-        spinbox.setValue(cfg['default'])
-        spinbox.setFixedWidth(76)
-        spinbox.setFixedHeight(22)
-        spinbox.setAlignment(Qt.AlignRight)
+        # Line 2: slider + value text field
+        slider_row = QHBoxLayout()
+        slider_row.setSpacing(6)
+        slider_row.setContentsMargins(0, 0, 0, 0)
 
         n_steps = round((cfg['max'] - cfg['min']) / cfg['step'])
         slider = QSlider(Qt.Horizontal)
         slider.setRange(0, n_steps)
         slider.setValue(round((cfg['default'] - cfg['min']) / cfg['step']))
+        slider.setFixedHeight(18)
         slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        slider.setFixedHeight(22)
 
-        self._spinboxes[key] = spinbox
-        self._sliders[key] = slider
+        val_edit = QLineEdit()
+        val_edit.setText(format(cfg['default'], ".2f"))
+        val_edit.setFixedWidth(58)
+        val_edit.setFixedHeight(18)
+        val_edit.setAlignment(Qt.AlignRight)
+        val_edit.setStyleSheet(
+            f"font-size: 10px; color: {_TEXT}; background: {_OVERLAY}; "
+            f"border: 1px solid {_ACCENT}; border-radius: 3px; padding: 0px 3px; font-family: monospace;"
+        )
+
+        slider_row.addWidget(slider, stretch=1)
+        slider_row.addWidget(val_edit)
+        vbox.addLayout(slider_row)
+
+        # Line 3: Min / Max / Step
+        range_row = QHBoxLayout()
+        range_row.setSpacing(3)
+        range_row.setContentsMargins(0, 0, 0, 0)
+
+        _rs = f"font-size: 9px; color: {_MUTED};"
+        _ss = (f"font-size: 9px; color: {_TEXT}; background: {_OVERLAY}; "
+               f"border: 1px solid {_BORDER}; border-radius: 2px; padding: 0px 2px;")
+
+        for lbl_text, attr, val in [("Min", "_min", cfg['min']),
+                                     ("Max", "_max", cfg['max']),
+                                     ("Stp", "_stp", cfg['step'])]:
+            lbl = QLabel(lbl_text)
+            lbl.setStyleSheet(_rs)
+            lbl.setFixedWidth(18)
+            sp = QDoubleSpinBox()
+            sp.setDecimals(2)
+            sp.setRange((1e-2 if attr == "_stp" else -1e9), 1e9)
+            sp.setValue(val)
+            sp.setFixedHeight(16)
+            sp.setFixedWidth(56)
+            sp.setAlignment(Qt.AlignRight)
+            sp.setButtonSymbols(QDoubleSpinBox.PlusMinus)
+            sp.setStyleSheet(_ss)
+            range_row.addWidget(lbl)
+            range_row.addWidget(sp)
+            if attr == "_min":
+                min_spin = sp
+            elif attr == "_max":
+                max_spin = sp
+            else:
+                step_spin = sp
+        vbox.addLayout(range_row)
+
+        self._value_edits[key]  = val_edit
+        self._sliders[key]      = slider
+        self._range_mins[key]   = min_spin
+        self._range_maxs[key]   = max_spin
+        self._range_steps[key]  = step_spin
 
         slider.valueChanged.connect(lambda v, k=key: self._on_slider_changed(k, v))
-        spinbox.valueChanged.connect(lambda v, k=key: self._on_spinbox_changed(k, v))
+        val_edit.editingFinished.connect(lambda k=key: self._on_value_edit_changed(k))
+        min_spin.valueChanged.connect(lambda v, k=key: self._on_row_range_changed(k))
+        max_spin.valueChanged.connect(lambda v, k=key: self._on_row_range_changed(k))
+        step_spin.valueChanged.connect(lambda v, k=key: self._on_row_range_changed(k))
 
-        row.addWidget(name_lbl)
-        row.addWidget(unit_lbl)
-        row.addWidget(spinbox)
-        row.addWidget(slider, stretch=1)
         return widget
 
+    # ------------------------------------------------------------------ #
+    # Slider control logic
+    # ------------------------------------------------------------------ #
+    def _on_slider_changed(self, key: str, int_val: int):
+        if self._updating:
+            return
+        r = self._param_ranges[key]
+        cfg = INPUT_CONFIG[key]
+        fval = round(r['min'] + int_val * r['step'], cfg['decimals'])
+        fval = max(r['min'], min(r['max'], fval))
+        self._updating = True
+        self._value_edits[key].setText(format(fval, ".2f"))
+        self._updating = False
+        self._inputs[key] = fval
+        # Update outputs instantly, debounce the heavier graph redraw
+        self._results = calculator.compute(self._inputs)
+        self._update_outputs()
+        self._recalc_timer.start(80)
+
+    def _on_value_edit_changed(self, key: str):
+        if self._updating:
+            return
+        cfg = INPUT_CONFIG[key]
+        r = self._param_ranges[key]
+        try:
+            fval = float(self._value_edits[key].text())
+        except ValueError:
+            return
+        fval = round(max(r['min'], min(r['max'], fval)), cfg['decimals'])
+        self._value_edits[key].setText(format(fval, ".2f"))
+        n_steps = min(10000, max(1, round((r['max'] - r['min']) / r['step'])))
+        int_val = max(0, min(round((fval - r['min']) / r['step']), n_steps))
+        self._updating = True
+        self._sliders[key].setValue(int_val)
+        self._updating = False
+        self._inputs[key] = fval
+        self._recalculate_full()
+
+    def _on_row_range_changed(self, key: str):
+        new_min  = self._range_mins[key].value()
+        new_max  = self._range_maxs[key].value()
+        new_step = self._range_steps[key].value()
+        if new_max <= new_min or new_step <= 0:
+            return
+        self._param_ranges[key] = {'min': new_min, 'max': new_max, 'step': new_step}
+        slider = self._sliders[key]
+        n_steps = min(10000, max(1, round((new_max - new_min) / new_step)))
+        slider.blockSignals(True)
+        slider.setRange(0, n_steps)
+        cur = max(new_min, min(new_max, self._inputs[key]))
+        slider.setValue(max(0, min(round((cur - new_min) / new_step), n_steps)))
+        slider.blockSignals(False)
+
+    # ------------------------------------------------------------------ #
+    # Output panel
+    # ------------------------------------------------------------------ #
     def _build_output_panel(self) -> QWidget:
         panel = QWidget()
         vbox = QVBoxLayout(panel)
@@ -499,6 +673,7 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
 
         outputs_group = QGroupBox("Calculated Outputs")
+        outputs_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         grid = QGridLayout(outputs_group)
         grid.setSpacing(2)
         grid.setContentsMargins(8, 10, 8, 6)
@@ -520,7 +695,7 @@ class MainWindow(QMainWindow):
 
             name_lbl = QLabel(cfg['label'])
             name_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            name_lbl.setStyleSheet(f"color: {_SUBTEXT}; font-size: 11px; background: transparent;")
+            name_lbl.setStyleSheet(f"color: {_SUBTEXT}; font-size: 11px;")
 
             val_lbl = QLabel("---")
             val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -534,14 +709,13 @@ class MainWindow(QMainWindow):
 
             unit_lbl = QLabel(cfg['unit'])
             unit_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
+            unit_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
 
             grid.addWidget(name_lbl, row_idx, cols[0])
             grid.addWidget(val_lbl,  row_idx, cols[1])
             grid.addWidget(unit_lbl, row_idx, cols[2])
             self._output_labels[key] = val_lbl
 
-        outputs_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         vbox.addWidget(outputs_group, stretch=0)
 
         graph_outer = QGroupBox("Sensitivity Analysis")
@@ -552,7 +726,7 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
         toolbar.addStretch()
         count_lbl = QLabel("Graphs:")
-        count_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px; background: transparent;")
+        count_lbl.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
         toolbar.addWidget(count_lbl)
         self._graph_count_spin = QSpinBox()
         self._graph_count_spin.setRange(1, 6)
@@ -560,6 +734,7 @@ class MainWindow(QMainWindow):
         self._graph_count_spin.setFixedWidth(48)
         self._graph_count_spin.setFixedHeight(22)
         self._graph_count_spin.setAlignment(Qt.AlignCenter)
+        self._graph_count_spin.setButtonSymbols(QSpinBox.PlusMinus)
         self._graph_count_spin.valueChanged.connect(self._set_graph_count)
         toolbar.addWidget(self._graph_count_spin)
         graph_outer_vbox.addLayout(toolbar)
@@ -573,7 +748,7 @@ class MainWindow(QMainWindow):
         self._graphs_grid.setColumnStretch(1, 1)
 
         graph_outer_vbox.addWidget(self._graphs_container, stretch=1)
-        vbox.addWidget(graph_outer, stretch=5)
+        vbox.addWidget(graph_outer, stretch=1)
 
         self._set_graph_count(2)
         p1 = self._graph_panels[1]
@@ -585,6 +760,9 @@ class MainWindow(QMainWindow):
 
         return panel
 
+    # ------------------------------------------------------------------ #
+    # Graph management
+    # ------------------------------------------------------------------ #
     _COLS = 2
 
     def _set_graph_count(self, count: int):
@@ -627,33 +805,21 @@ class MainWindow(QMainWindow):
         for panel in self._graph_panels:
             panel.update_graph(self._inputs, self._results)
 
-    def _on_slider_changed(self, key: str, int_val: int):
-        if self._updating:
-            return
-        self._updating = True
-        cfg = INPUT_CONFIG[key]
-        fval = round(cfg['min'] + int_val * cfg['step'], cfg['decimals'])
-        self._spinboxes[key].setValue(fval)
-        self._updating = False
-        self._inputs[key] = fval
-        self._recalculate()
-
-    def _on_spinbox_changed(self, key: str, fval: float):
-        if self._updating:
-            return
-        self._updating = True
-        cfg = INPUT_CONFIG[key]
-        n_steps = round((cfg['max'] - cfg['min']) / cfg['step'])
-        int_val = max(0, min(round((fval - cfg['min']) / cfg['step']), n_steps))
-        self._sliders[key].setValue(int_val)
-        self._updating = False
-        self._inputs[key] = fval
-        self._recalculate()
-
+    # ------------------------------------------------------------------ #
+    # Signal handlers
+    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------ #
+    # Calculation + display
+    # ------------------------------------------------------------------ #
     def _recalculate(self):
         self._results = calculator.compute(self._inputs)
         self._update_outputs()
         self._update_all_graphs()
+
+    def _recalculate_full(self):
+        """Used by value edit and range changes — always recalculates immediately."""
+        self._recalc_timer.stop()
+        self._recalculate()
 
     def _update_outputs(self):
         for key, lbl in self._output_labels.items():
@@ -674,10 +840,3 @@ class MainWindow(QMainWindow):
                     f"border: 1px solid {_BORDER}; border-radius: 3px; "
                     "padding: 0px 4px; font-family: monospace;"
                 )
-
-    @staticmethod
-    def _separator() -> QFrame:
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet(f"color: {_BORDER}; background: {_BORDER};")
-        return line

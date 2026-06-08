@@ -36,7 +36,7 @@ OUTPUT_CONFIG = {
     'wingspan':        {'label': 'Wingspan',           'unit': 'm',      'format': '.4f', 'zones': None},
     'wet_area':        {'label': 'Wet Area',           'unit': 'm²','format': '.5f', 'zones': None},
     'structure_mass':  {'label': 'Structure Mass',     'unit': 'kg',     'format': '.4f', 'zones': None},
-    'structure_limit': {'label': 'Structure Budget',   'unit': 'kg',     'format': '.4f', 'zones': None},
+    'structure_limit': {'label': 'Structure Limit',    'unit': 'kg',     'format': '.4f', 'zones': None},
     'Cl':              {'label': 'CL at L/D max',      'unit': '',       'format': '.4f', 'zones': None},
     'q':               {'label': 'Dynamic Pressure',   'unit': 'Pa',     'format': '.2f', 'zones': None},
     'k':               {'label': 'k (induced drag)',   'unit': '',       'format': '.5f', 'zones': None},
