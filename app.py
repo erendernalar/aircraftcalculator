@@ -1044,21 +1044,8 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         info_menu.addAction(about_action)
 
-    @staticmethod
-    def _find_logo() -> str:
-        if getattr(sys, 'frozen', False):
-            return os.path.join(sys._MEIPASS, 'assets', 'logo.png')
-        for base in [
-            os.path.dirname(os.path.abspath(__file__)),
-            os.path.dirname(os.path.abspath(sys.argv[0])),
-            os.getcwd(),
-        ]:
-            p = os.path.join(base, 'assets', 'logo.png')
-            if os.path.exists(p):
-                return p
-        return ''
-
     def _show_about(self):
+        import base64
         from PyQt5.QtWidgets import QDialog, QDialogButtonBox
         dlg = QDialog(self)
         dlg.setWindowTitle("About")
@@ -1069,15 +1056,18 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 24, 24, 20)
         layout.setSpacing(0)
 
-        # Logo
-        logo_path = self._find_logo()
-        if os.path.exists(logo_path):
+        # Logo — loaded from embedded base64 (no filesystem dependency)
+        try:
+            from logo_data import LOGO_B64
+            raw_pm = QPixmap()
+            raw_pm.loadFromData(base64.b64decode(LOGO_B64))
             logo_lbl = QLabel()
             logo_lbl.setAlignment(Qt.AlignCenter)
-            pixmap = QPixmap(logo_path).scaled(
-                220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            logo_lbl.setPixmap(pixmap)
+            logo_lbl.setPixmap(raw_pm.scaled(
+                220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             layout.addWidget(logo_lbl)
+        except Exception:
+            pass
 
         layout.addSpacing(14)
 

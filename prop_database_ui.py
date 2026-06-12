@@ -3,6 +3,9 @@ Prop Database page UI — standard + advanced graph views.
 """
 
 import math
+import os
+import sys
+import traceback
 
 import numpy as np
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
@@ -653,14 +656,24 @@ class PropDatabasePage(QWidget):
         self._prop_table.blockSignals(False)
 
     def _on_prop_selected(self):
-        items = self._prop_table.selectedItems()
-        if not items:
-            return
-        prop_id = self._prop_table.item(items[0].row(), 0).data(Qt.UserRole)
-        prop = self._database.get_prop(prop_id)
-        if prop:
-            self._current_prop = prop
-            self._load_prop_detail(prop)
+        try:
+            items = self._prop_table.selectedItems()
+            if not items:
+                return
+            prop_id = self._prop_table.item(items[0].row(), 0).data(Qt.UserRole)
+            prop = self._database.get_prop(prop_id)
+            if prop:
+                self._current_prop = prop
+                self._load_prop_detail(prop)
+        except Exception:
+            tb = traceback.format_exc()
+            log = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'crash.log')
+            try:
+                with open(log, 'w') as f:
+                    f.write(tb)
+            except Exception:
+                pass
+            raise
 
     # ── Detail panel ───────────────────────────────────────────────
 
