@@ -17,6 +17,18 @@ from typing import Optional
 
 import numpy as np
 
+# numpy 2.0 moved numpy.core.multiarray → numpy._core.multiarray.
+# Databases built with numpy 1.x contain pickle references to the old path.
+# Patch sys.modules so those pickles still load.
+try:
+    import numpy.core.multiarray  # noqa: F401
+except ImportError:
+    import numpy._core.multiarray as _marray
+    import types
+    _core = sys.modules.setdefault('numpy.core', types.ModuleType('numpy.core'))
+    _core.multiarray = _marray
+    sys.modules['numpy.core.multiarray'] = _marray
+
 def _base_dir() -> str:
     """Return the directory that contains props.db — works both normally and when
     frozen by PyInstaller (--onefile extracts files to sys._MEIPASS)."""
@@ -348,14 +360,27 @@ class PropDatabase:
             return self._prop_cache[prop_id]
         if not self.is_ready():
             return None
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM props WHERE id = ?", (prop_id,)).fetchone()
-            if row is None:
-                return None
-            rpms = [_from_blob(r['data']) for r in conn.execute(
-                "SELECT data FROM rpm_blocks WHERE prop_id = ? ORDER BY rpm",
-                (prop_id,))]
+        try:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT * FROM props WHERE id = ?", (prop_id,)).fetchone()
+                if row is None:
+                    return None
+                rpms = [_from_blob(r['data']) for r in conn.execute(
+                    "SELECT data FROM rpm_blocks WHERE prop_id = ? ORDER BY rpm",
+                    (prop_id,))]
+        except Exception as exc:
+            # Stale db (e.g. built with a different numpy version) — delete and
+            # signal caller to rebuild by returning None.
+            try:
+                os.remove(self._db_path)
+            except OSError:
+                pass
+            self._prop_cache.clear()
+            raise RuntimeError(
+                f"props.db is incompatible with the current numpy version "
+                f"and has been deleted. Restart the app to rebuild it."
+            ) from exc
         prop = PropData(
             id=row['id'], filename=row['filename'],
             display_name=row['display_name'], diameter_in=row['diameter'],
