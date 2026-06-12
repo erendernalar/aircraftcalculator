@@ -1,15 +1,28 @@
+import os
 import sys
 
-from PyQt5.QtGui import QColor, QPalette
+from PyQt5.QtGui import QColor, QIcon, QPalette
 from PyQt5.QtWidgets import QApplication
 
 from app import MainWindow, DARK_STYLE
 from theme import _BG, _SURFACE, _OVERLAY, _TEXT, _SUBTEXT, _MUTED, _ACCENT, _RED
 
+def _app_icon() -> QIcon:
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    # Prefer ICO on Windows (supports all taskbar/title sizes), PNG elsewhere
+    if sys.platform == 'win32':
+        path = os.path.join(base, 'assets', 'logo.ico')
+    else:
+        path = os.path.join(base, 'assets', 'logo.png')
+    if not os.path.exists(path):
+        path = os.path.join(base, 'assets', 'logo.png')
+    return QIcon(path)
+
 
 def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
+    app.setWindowIcon(_app_icon())
 
     c = QColor
     palette = QPalette()

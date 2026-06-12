@@ -1,9 +1,11 @@
 import json
 import math
+import os
+import sys
 
 import numpy as np
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea,
@@ -1043,15 +1045,70 @@ class MainWindow(QMainWindow):
         info_menu.addAction(about_action)
 
     def _show_about(self):
-        msg = QMessageBox(self)
-        msg.setWindowTitle("About")
-        msg.setText(
-            "<b>Electric Aircraft Design Calculator</b><br><br>"
-            "Developed by <b>Ensar Öztürk</b><br>"
-            "<a href='mailto:ensarr.ozturk@gmail.com'>ensarr.ozturk@gmail.com</a>"
-        )
-        msg.setIcon(QMessageBox.Information)
-        msg.exec_()
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About")
+        dlg.setFixedSize(360, 460)
+        dlg.setStyleSheet(f"background:{_BG};")
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(0)
+
+        # Logo
+        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        logo_path = os.path.join(base, 'assets', 'logo.png')
+        if os.path.exists(logo_path):
+            logo_lbl = QLabel()
+            logo_lbl.setAlignment(Qt.AlignCenter)
+            pixmap = QPixmap(logo_path).scaled(
+                220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_lbl.setPixmap(pixmap)
+            layout.addWidget(logo_lbl)
+
+        layout.addSpacing(14)
+
+        title = QLabel("Aircraft Calculator")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            f"color:{_TEXT};font-size:18px;font-weight:700;background:transparent;")
+        layout.addWidget(title)
+
+        layout.addSpacing(6)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(f"background:{_BORDER};max-height:1px;border:none;")
+        layout.addWidget(sep)
+
+        layout.addSpacing(14)
+
+        dev = QLabel("Developed by  <b>Ensar Öztürk</b>")
+        dev.setAlignment(Qt.AlignCenter)
+        dev.setStyleSheet(f"color:{_SUBTEXT};font-size:12px;background:transparent;")
+        layout.addWidget(dev)
+
+        layout.addSpacing(6)
+
+        mail = QLabel('<a href="mailto:ensarr.ozturk@gmail.com" '
+                      f'style="color:{_ACCENT};text-decoration:none;">'
+                      'ensarr.ozturk@gmail.com</a>')
+        mail.setAlignment(Qt.AlignCenter)
+        mail.setOpenExternalLinks(True)
+        mail.setStyleSheet("background:transparent;font-size:11px;")
+        layout.addWidget(mail)
+
+        layout.addStretch()
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        btn_box.accepted.connect(dlg.accept)
+        btn_box.setStyleSheet(
+            f"QPushButton{{background:{_ACCENT};color:{_BG};border:none;"
+            f"border-radius:5px;padding:6px 28px;font-weight:600;font-size:11px;}}"
+            f"QPushButton:hover{{background:#5EEDAA;}}")
+        layout.addWidget(btn_box, alignment=Qt.AlignCenter)
+
+        dlg.exec_()
 
     def _save_state(self):
         path, _ = QFileDialog.getSaveFileName(

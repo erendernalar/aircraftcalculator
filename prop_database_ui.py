@@ -262,7 +262,7 @@ class PropAdvancedGraph(QWidget):
         ax.set_ylabel(f"{y_lbl_t} ({y_unit})" if y_unit else y_lbl_t, fontsize=8)
         ax.set_title(f"{self._prop.display_name}  —  all RPMs", fontsize=8, color=_SUBTEXT)
         ax.legend(fontsize=7, facecolor=_OVERLAY, edgecolor=_BORDER, labelcolor=_TEXT)
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def _draw_3d(self):
         x_key = self._x_combo.currentData()
@@ -352,7 +352,7 @@ class PropAdvancedGraph(QWidget):
         ax.set_xlabel(f"{x_lbl_t} ({x_unit})" if x_unit else x_lbl_t, fontsize=8)
         ax.set_ylabel("RPM", fontsize=8)
         ax.set_title(f"{self._prop.display_name}  —  {z_lbl_t}", fontsize=8, color=_SUBTEXT)
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
 
 # ------------------------------------------------------------------ #
@@ -381,7 +381,7 @@ class _StandardGraph(QWidget):
         ax.yaxis.label.set_color(_SUBTEXT)
         ax.grid(True, alpha=0.10, color=_SUBTEXT, linewidth=0.6)
 
-    def update(self, prop: db.PropData, r: db.PropRPMData):
+    def draw_prop(self, prop: db.PropData, r: db.PropRPMData):
         self._figure.clear()
 
         ax1 = self._figure.add_subplot(1, 2, 1)
@@ -429,7 +429,7 @@ class _StandardGraph(QWidget):
         ax2.legend(l1 + l2, lb1 + lb2,
                    fontsize=7, facecolor=_OVERLAY, edgecolor=_BORDER, labelcolor=_TEXT)
 
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
 
 # ------------------------------------------------------------------ #
@@ -912,14 +912,14 @@ class PropDatabasePage(QWidget):
         valid_pe = r.Pe[r.Pe > 0]
         self._stat_labels['max_eff'].setText(
             fmt(float(valid_pe.max())) if len(valid_pe) else "—")
-        self._stat_labels['static_thr'].setText(fmt(r.thrust_N[0]))
-        self._stat_labels['static_pwr'].setText(fmt(r.pwr_W[0], 1))
-        self._stat_labels['thr_pwr'].setText(fmt(r.thr_pwr_gW[0], 1))
+        self._stat_labels['static_thr'].setText(fmt(r.thrust_N[0]) if len(r.thrust_N) else "—")
+        self._stat_labels['static_pwr'].setText(fmt(r.pwr_W[0], 1) if len(r.pwr_W) else "—")
+        self._stat_labels['thr_pwr'].setText(fmt(r.thr_pwr_gW[0], 1) if len(r.thr_pwr_gW) else "—")
 
     def _update_graphs(self, prop: db.PropData, r: db.PropRPMData):
         idx = self._graph_stack.currentIndex()
         if idx == 0:
-            self._std_graph.update(prop, r)
+            self._std_graph.draw_prop(prop, r)
         else:
             self._adv_graph.set_prop(prop, self._current_rpm)
 
