@@ -7,29 +7,22 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea,
-    QSpinBox, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget,
+    QSpinBox, QSizePolicy, QSlider, QStackedWidget, QStyle, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 import calculator
 from calculator import INPUT_CONFIG, OUTPUT_CONFIG
-
-_BG      = '#1E1E2E'
-_SURFACE = '#252535'
-_OVERLAY = '#313244'
-_BORDER  = '#45475A'
-_TEXT    = '#CDD6F4'
-_SUBTEXT = '#A6ADC8'
-_MUTED   = '#6C7086'
-_ACCENT  = '#89B4FA'
-_ACCENT2 = '#FAB387'
+from prop_database_ui import PropDatabasePage
+from theme import _BG, _SURFACE, _OVERLAY, _BORDER, _TEXT, _SUBTEXT, _MUTED, _ACCENT, _ACCENT2, _GREEN
 
 DARK_STYLE = f"""
 QWidget {{
     background-color: {_BG};
     color: {_TEXT};
     font-size: 11px;
+    font-family: "Segoe UI", "Inter", "SF Pro Text", sans-serif;
 }}
 QScrollArea, QScrollArea > QWidget > QWidget {{
     background-color: {_BG};
@@ -40,7 +33,7 @@ QGroupBox {{
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
-    font-weight: bold;
+    font-weight: 600;
     color: {_SUBTEXT};
     font-size: 11px;
 }}
@@ -52,9 +45,9 @@ QGroupBox::title {{
 QDoubleSpinBox, QSpinBox {{
     background: {_OVERLAY};
     border: 1px solid {_BORDER};
-    border-radius: 3px;
+    border-radius: 4px;
     color: {_TEXT};
-    padding: 1px 3px;
+    padding: 1px 4px;
     selection-background-color: {_ACCENT};
     selection-color: {_BG};
 }}
@@ -79,9 +72,10 @@ QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
 QComboBox {{
     background: {_OVERLAY};
     border: 1px solid {_BORDER};
-    border-radius: 3px;
+    border-radius: 4px;
     color: {_TEXT};
-    padding: 1px 4px;
+    padding: 2px 6px;
+    min-height: 20px;
 }}
 QComboBox::drop-down {{
     border: none;
@@ -93,6 +87,8 @@ QComboBox QAbstractItemView {{
     selection-background-color: {_ACCENT};
     selection-color: {_BG};
     border: 1px solid {_BORDER};
+    border-radius: 4px;
+    outline: none;
 }}
 QSlider::groove:horizontal {{
     height: 4px;
@@ -113,43 +109,75 @@ QSlider::sub-page:horizontal {{
 QPushButton {{
     background: {_OVERLAY};
     border: 1px solid {_BORDER};
-    border-radius: 4px;
-    color: {_TEXT};
-    padding: 2px 8px;
+    border-radius: 5px;
+    color: {_SUBTEXT};
+    padding: 3px 10px;
+    font-weight: 500;
 }}
 QPushButton:hover {{
     background: {_BORDER};
+    color: {_TEXT};
     border-color: {_ACCENT};
 }}
 QPushButton:checked {{
     background: {_ACCENT};
     color: {_BG};
     border-color: {_ACCENT};
-    font-weight: bold;
+    font-weight: 600;
+}}
+QPushButton:pressed {{
+    background: {_ACCENT};
+    color: {_BG};
 }}
 QScrollBar:vertical {{
-    background: {_SURFACE};
-    width: 6px;
+    background: transparent;
+    width: 5px;
     border-radius: 3px;
     margin: 0;
 }}
 QScrollBar::handle:vertical {{
     background: {_BORDER};
     border-radius: 3px;
-    min-height: 20px;
+    min-height: 24px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {_MUTED};
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
-    background: {_SURFACE};
-    height: 6px;
+    background: transparent;
+    height: 5px;
     border-radius: 3px;
 }}
 QScrollBar::handle:horizontal {{
     background: {_BORDER};
     border-radius: 3px;
 }}
+QScrollBar::handle:horizontal:hover {{
+    background: {_MUTED};
+}}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 QLabel {{ background: transparent; }}
+QLineEdit {{
+    background: {_OVERLAY};
+    border: 1px solid {_BORDER};
+    border-radius: 4px;
+    color: {_TEXT};
+    padding: 2px 6px;
+    selection-background-color: {_ACCENT};
+    selection-color: {_BG};
+}}
+QLineEdit:focus {{
+    border-color: {_ACCENT};
+}}
+QToolTip {{
+    background: {_OVERLAY};
+    color: {_TEXT};
+    border: 1px solid {_BORDER};
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 10px;
+}}
 """
 
 
@@ -484,15 +512,81 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         self.setCentralWidget(central)
-        root = QHBoxLayout(central)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        root.addWidget(self._build_input_panel(), stretch=0)
-        root.addWidget(self._build_output_panel(), stretch=1)
+        self._tabs = QStackedWidget()
+
+        def _tab_btn(label, active=False):
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setChecked(active)
+            btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+            btn.setFixedHeight(32)
+            btn.setStyleSheet(self._tab_btn_style(active))
+            return btn
+
+        self._tab_calculator  = _tab_btn("Calculator",    active=True)
+        self._tab_propdb      = _tab_btn("Prop Database", active=False)
+
+        self._tab_calculator.clicked.connect(lambda: self._switch_tab(0))
+        self._tab_propdb.clicked.connect(lambda: self._switch_tab(1))
+
+        tab_row = QHBoxLayout()
+        tab_row.setContentsMargins(10, 6, 10, 0)
+        tab_row.setSpacing(2)
+        tab_row.addWidget(self._tab_calculator)
+        tab_row.addWidget(self._tab_propdb)
+        tab_row.addStretch()
+        root.addLayout(tab_row)
+
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(f"background: {_BORDER}; max-height: 1px; border: none;")
+        root.addWidget(separator)
+
+        root.addWidget(self._tabs, stretch=1)
+
+        calculator_page = QWidget()
+        calc_layout = QHBoxLayout(calculator_page)
+        calc_layout.setContentsMargins(8, 8, 8, 8)
+        calc_layout.setSpacing(8)
+        calc_layout.addWidget(self._build_input_panel(), stretch=0)
+        calc_layout.addWidget(self._build_output_panel(), stretch=1)
+        self._tabs.addWidget(calculator_page)
+
+        self._tabs.addWidget(self._build_prop_database_page())
 
         self._build_menu()
         self._recalculate()
+
+    # ------------------------------------------------------------------ #
+    # Tab helpers
+    # ------------------------------------------------------------------ #
+    def _tab_btn_style(self, active: bool) -> str:
+        if active:
+            return (
+                f"QPushButton{{"
+                f"background:transparent;border:none;border-bottom:2px solid {_GREEN};"
+                f"color:{_TEXT};font-size:11px;font-weight:600;"
+                f"padding:4px 16px;border-radius:0;}}"
+                f"QPushButton:hover{{background:transparent;}}"
+            )
+        return (
+            f"QPushButton{{"
+            f"background:transparent;border:none;border-bottom:2px solid transparent;"
+            f"color:{_MUTED};font-size:11px;font-weight:500;"
+            f"padding:4px 16px;border-radius:0;}}"
+            f"QPushButton:hover{{color:{_SUBTEXT};background:transparent;}}"
+        )
+
+    def _switch_tab(self, index: int):
+        self._tabs.setCurrentIndex(index)
+        self._tab_calculator.setChecked(index == 0)
+        self._tab_propdb.setChecked(index == 1)
+        self._tab_calculator.setStyleSheet(self._tab_btn_style(index == 0))
+        self._tab_propdb.setStyleSheet(self._tab_btn_style(index == 1))
 
     # ------------------------------------------------------------------ #
     # Input panel
@@ -917,6 +1011,12 @@ class MainWindow(QMainWindow):
         self._sliders[key].setValue(int_val)
         self._value_edits[key].setText(format(val, ".2f"))
         self._updating = False
+
+    # ------------------------------------------------------------------ #
+    # Prop Database page (blank — implementation pending)
+    # ------------------------------------------------------------------ #
+    def _build_prop_database_page(self) -> QWidget:
+        return PropDatabasePage()
 
     # ------------------------------------------------------------------ #
     # File menu
