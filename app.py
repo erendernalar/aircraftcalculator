@@ -285,7 +285,7 @@ class GraphPanel(QWidget):
 
         outer.addLayout(header)
 
-        self._figure = Figure(tight_layout=True)
+        self._figure = Figure(layout='constrained')
         self._figure.patch.set_facecolor(_BG)
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._canvas.setStyleSheet(f"background: {_BG};")
@@ -1044,6 +1044,20 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         info_menu.addAction(about_action)
 
+    @staticmethod
+    def _find_logo() -> str:
+        if getattr(sys, 'frozen', False):
+            return os.path.join(sys._MEIPASS, 'assets', 'logo.png')
+        for base in [
+            os.path.dirname(os.path.abspath(__file__)),
+            os.path.dirname(os.path.abspath(sys.argv[0])),
+            os.getcwd(),
+        ]:
+            p = os.path.join(base, 'assets', 'logo.png')
+            if os.path.exists(p):
+                return p
+        return ''
+
     def _show_about(self):
         from PyQt5.QtWidgets import QDialog, QDialogButtonBox
         dlg = QDialog(self)
@@ -1056,8 +1070,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         # Logo
-        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        logo_path = os.path.join(base, 'assets', 'logo.png')
+        logo_path = self._find_logo()
         if os.path.exists(logo_path):
             logo_lbl = QLabel()
             logo_lbl.setAlignment(Qt.AlignCenter)

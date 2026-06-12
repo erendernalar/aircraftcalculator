@@ -7,15 +7,28 @@ from PyQt5.QtWidgets import QApplication
 from app import MainWindow, DARK_STYLE
 from theme import _BG, _SURFACE, _OVERLAY, _TEXT, _SUBTEXT, _MUTED, _ACCENT, _RED
 
+
+def _find_assets_dir() -> str:
+    """Return the assets/ directory regardless of how the app is launched."""
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, 'assets')
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets'),
+        os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'assets'),
+        os.path.join(os.getcwd(), 'assets'),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    return candidates[0]
+
+
 def _app_icon() -> QIcon:
-    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    # Prefer ICO on Windows (supports all taskbar/title sizes), PNG elsewhere
-    if sys.platform == 'win32':
-        path = os.path.join(base, 'assets', 'logo.ico')
-    else:
-        path = os.path.join(base, 'assets', 'logo.png')
-    if not os.path.exists(path):
-        path = os.path.join(base, 'assets', 'logo.png')
+    assets = _find_assets_dir()
+    # Prefer ICO on Windows (multi-resolution), PNG everywhere else
+    ico = os.path.join(assets, 'logo.ico')
+    png = os.path.join(assets, 'logo.png')
+    path = ico if (sys.platform == 'win32' and os.path.exists(ico)) else png
     return QIcon(path)
 
 

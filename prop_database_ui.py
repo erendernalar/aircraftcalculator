@@ -131,7 +131,7 @@ class PropAdvancedGraph(QWidget):
         outer.addLayout(header)
 
         # ── Canvas ─────────────────────────────────────────────────
-        self._figure = Figure(tight_layout=True)
+        self._figure = Figure(layout='constrained')
         self._figure.patch.set_facecolor(_BG)
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._canvas.setStyleSheet(f"background:{_BG};")
@@ -365,7 +365,7 @@ class _StandardGraph(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self._figure = Figure(tight_layout=True)
+        self._figure = Figure(layout='constrained')
         self._figure.patch.set_facecolor(_BG)
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._canvas.setStyleSheet(f"background:{_BG};")
