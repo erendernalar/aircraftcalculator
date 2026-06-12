@@ -11,13 +11,21 @@ import os
 import pickle
 import re
 import sqlite3
+import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
 
-_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prop_data')
-_DB_PATH  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'props.db')
+def _base_dir() -> str:
+    """Return the directory that contains props.db — works both normally and when
+    frozen by PyInstaller (--onefile extracts files to sys._MEIPASS)."""
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+_DATA_DIR = os.path.join(_base_dir(), 'prop_data')
+_DB_PATH  = os.path.join(_base_dir(), 'props.db')
 
 VARIANT_LABELS: dict = {
     '':          'Standard',

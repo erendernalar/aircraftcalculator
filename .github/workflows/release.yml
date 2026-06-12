@@ -31,7 +31,7 @@ jobs:
           --onefile
           --windowed
           --name "AircraftCalculator-${{ github.ref_name }}"
-          --add-data "calculator.py;."
+          --add-data "props.db;."
           main.py
 
       - name: Upload to GitHub Release
